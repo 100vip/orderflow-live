@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>BTCUSDT · 短周期订单流信号</title>
+<title>BTCUSDT · 订单流决策板</title>
 <style>
   :root {
     --bg: #0b0f14;
@@ -13,9 +13,11 @@
     --hist: #5b8def;
     --up: #3ecf8e;
     --down: #f07178;
-    --flat: #d2a8ff;
+    --flat: #9aa7bd;
+    --wait: #d2a8ff;
     --grid: #1e2a3a;
     --accent: #f0b429;
+    --warn: #f0b429;
   }
   * { box-sizing: border-box; }
   body {
@@ -29,58 +31,86 @@
   h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
   .meta { color: var(--muted); font-size: 13px; }
   .pill {
-    display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    letter-spacing: .04em;
   }
-  .pill.up { background: rgba(62,207,142,.15); color: var(--up); }
-  .pill.down { background: rgba(240,113,120,.15); color: var(--down); }
-  .pill.flat { background: rgba(210,168,255,.15); color: var(--flat); }
-  main { padding: 12px 14px 28px; max-width: 1200px; margin: 0 auto; }
+  .pill.long, .pill.up { background: rgba(62,207,142,.18); color: var(--up); }
+  .pill.short, .pill.down { background: rgba(240,113,120,.18); color: var(--down); }
+  .pill.wait, .pill.flat { background: rgba(155,167,189,.12); color: var(--flat); }
+  main { padding: 12px 14px 28px; max-width: 1100px; margin: 0 auto; }
+
+  .board {
+    background: linear-gradient(180deg, #15202b 0%, var(--panel) 100%);
+    border: 1px solid var(--grid); border-radius: 14px;
+    padding: 18px 20px; margin-bottom: 14px;
+  }
+  .board.wait-state { border-color: #2a3545; }
+  .board.long-state { border-color: rgba(62,207,142,.45); box-shadow: 0 0 0 1px rgba(62,207,142,.08); }
+  .board.short-state { border-color: rgba(240,113,120,.45); box-shadow: 0 0 0 1px rgba(240,113,120,.08); }
+  .board .kicker { font-size: 12px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+  .board .headline {
+    font-size: 34px; font-weight: 800; line-height: 1.15; margin: 0 0 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .board.long-state .headline { color: var(--up); }
+  .board.short-state .headline { color: var(--down); }
+  .board.wait-state .headline { color: var(--flat); }
+  .board .detail { font-size: 14px; color: var(--text); line-height: 1.5; opacity: .92; }
+  .board .risk {
+    margin-top: 10px; font-size: 12px; color: var(--muted); line-height: 1.5;
+    padding: 8px 10px; border-radius: 8px; background: rgba(240,180,41,.06);
+    border: 1px solid rgba(240,180,41,.18);
+  }
   .price-row {
-    display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; margin-bottom: 12px;
+    display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: baseline; margin-bottom: 12px;
   }
-  .price { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .price { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
   .grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 12px; margin-bottom: 14px;
   }
   .card {
     background: var(--panel); border: 1px solid var(--grid); border-radius: 12px;
-    padding: 14px 16px;
+    padding: 14px 16px; position: relative;
   }
-  .card h2 { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
-  .prob {
-    font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1;
+  .card.dim { opacity: .72; }
+  .card.hot-long { border-color: rgba(62,207,142,.4); }
+  .card.hot-short { border-color: rgba(240,113,120,.4); }
+  .card h2 { margin: 0 0 8px; font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+  .badge {
+    position: absolute; top: 12px; right: 12px;
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
   }
-  .prob.up { color: var(--up); }
-  .prob.down { color: var(--down); }
-  .prob.flat { color: var(--flat); }
-  .bar {
-    height: 10px; border-radius: 999px; background: #1a2330; overflow: hidden; margin: 10px 0 6px;
-    display: flex;
+  .badge.go { background: rgba(62,207,142,.15); color: var(--up); }
+  .badge.short { background: rgba(240,113,120,.15); color: var(--down); }
+  .badge.wait { background: rgba(155,167,189,.12); color: var(--flat); }
+  .badge.off { background: rgba(155,167,189,.08); color: #6b7a90; }
+  .big {
+    font-size: 28px; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.15;
   }
-  .bar .u { background: var(--up); height: 100%; }
-  .bar .d { background: var(--down); height: 100%; }
-  .sub { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .big.long { color: var(--up); }
+  .big.short { color: var(--down); }
+  .big.wait { color: var(--flat); font-size: 26px; }
+  .sub { font-size: 12px; color: var(--muted); line-height: 1.55; margin-top: 6px; }
   .sub b { color: var(--text); font-weight: 600; }
-  .chart-wrap { width: 100%; height: 220px; }
+  .chart-wrap { width: 100%; height: 200px; }
   canvas { width: 100%; height: 100%; display: block; }
   .metrics {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 10px; margin-top: 12px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px; margin-top: 10px;
   }
   .metric {
     background: #0e141c; border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px;
   }
   .metric .k { font-size: 11px; color: var(--muted); }
-  .metric .v { font-size: 16px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .metric .v { font-size: 15px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .note {
-    margin-top: 14px; padding: 12px 14px; border-radius: 10px;
+    margin-top: 12px; padding: 12px 14px; border-radius: 10px;
     background: rgba(240,180,41,.06); border: 1px solid rgba(240,180,41,.2);
     font-size: 12px; color: var(--muted); line-height: 1.55;
   }
-  .feats {
-    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
-  }
+  .feats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .feat {
     font-size: 11px; padding: 3px 8px; border-radius: 6px; background: #0e141c; border: 1px solid var(--grid);
     font-variant-numeric: tabular-nums; color: var(--muted);
@@ -90,17 +120,24 @@
 </head>
 <body>
 <header>
-  <h1>BTCUSDT · 短周期订单流信号</h1>
-  <span id="dir" class="pill flat">—</span>
+  <h1>BTCUSDT · 订单流决策板</h1>
+  <span id="dir" class="pill wait">观望</span>
   <span id="gen" class="meta"></span>
   <span class="meta" style="width:100%">
-    15m / 1h / 4h 上涨概率 + ±1σ 突破 · 样本外准确率诚实标注 · liquiditymapper 同源（OKX/Bitget/Hyperliquid）
+    只亮有边信号 · 默认 15m · 弱边一律「无边/观望」· 不过滤的 ~50% 概率不再展示
   </span>
 </header>
 <main>
   <div class="price-row">
     <div class="price" id="price">—</div>
     <div class="meta" id="summary">加载中…</div>
+  </div>
+
+  <div class="board wait-state" id="board">
+    <div class="kicker">当前决策</div>
+    <div class="headline" id="headline">加载中…</div>
+    <div class="detail" id="detail"></div>
+    <div class="risk" id="risk"></div>
   </div>
 
   <div class="grid" id="signals"></div>
@@ -112,7 +149,7 @@
   </div>
 
   <div class="card" style="margin-top:12px">
-    <h2>样本外（walk-forward 末段）</h2>
+    <h2>过滤门槛 · 样本外（walk-forward）</h2>
     <div class="metrics" id="oos"></div>
     <div class="note" id="note"></div>
     <div style="margin-top:10px" class="meta">当前特征快照</div>
@@ -133,8 +170,20 @@ function resize() {
 }
 window.addEventListener('resize', () => { resize(); if (window.__last) draw(window.__last); });
 
-function pct(p) { return (Number(p) * 100).toFixed(1) + '%'; }
-function clsDir(d) { return d === 'up' ? 'up' : (d === 'down' ? 'down' : 'flat'); }
+function pct(p) {
+  if (p == null || isNaN(Number(p))) return '—';
+  return (Number(p) * 100).toFixed(1) + '%';
+}
+function actionLabel(a) {
+  if (a === 'long') return '多';
+  if (a === 'short') return '空';
+  return '观望';
+}
+function pillClass(action) {
+  if (action === 'long') return 'long';
+  if (action === 'short') return 'short';
+  return 'wait';
+}
 
 function draw(data) {
   window.__last = data;
@@ -173,50 +222,92 @@ function draw(data) {
   ctx.stroke();
 }
 
+function renderBoard(data) {
+  const d = data.decision || {};
+  const action = d.action || 'wait';
+  const board = document.getElementById('board');
+  board.className = 'board ' + (action === 'long' ? 'long-state' : action === 'short' ? 'short-state' : 'wait-state');
+  document.getElementById('headline').textContent = d.headline || '无边 / 观望';
+  document.getElementById('detail').textContent = d.detail || d.risk_note || '';
+  let risk = d.risk_note || '';
+  if (d.rolling_bucket_hit && d.rolling_bucket_hit.hit != null) {
+    risk += ` 近端同桶命中≈${(d.rolling_bucket_hit.hit*100).toFixed(0)}%（n=${d.rolling_bucket_hit.n}）。`;
+  }
+  if (d.flow_confirm && d.flow_confirm.available) {
+    risk += d.flow_confirm.aligned ? ' 订单流多数对齐。' : ' 订单流未对齐。';
+  }
+  document.getElementById('risk').textContent = risk;
+  const pill = document.getElementById('dir');
+  pill.textContent = actionLabel(action);
+  pill.className = 'pill ' + pillClass(action);
+}
+
 function renderSignals(data) {
   const box = document.getElementById('signals');
   const sigs = data.signals || [];
-  const oos = data.oos_metrics || {};
+  const cals = data.calibrations || {};
   box.innerHTML = sigs.map(s => {
-    const pu = Number(s.p_up);
-    const pd = 1 - pu;
-    const d = s.direction || 'flat';
-    const m = (oos[s.label] && oos[s.label].direction) || {};
-    const acc = m.accuracy != null ? (m.accuracy * 100).toFixed(1) + '%' : '—';
-    const accC = m.accuracy_confident != null ? (m.accuracy_confident * 100).toFixed(1) + '%' : '—';
-    const cov = m.confident_coverage != null ? (m.confident_coverage * 100).toFixed(0) + '%' : '—';
-    const n = m.n != null ? m.n : '—';
-    return `<div class="card">
-      <h2>${s.label} 上涨概率</h2>
-      <div class="prob ${clsDir(d)}">${pct(pu)}</div>
-      <div class="bar"><div class="u" style="width:${(pu*100).toFixed(1)}%"></div><div class="d" style="width:${(pd*100).toFixed(1)}%"></div></div>
-      <div class="sub">下跌 ${(pd*100).toFixed(1)}% · 信号 <b>${d.toUpperCase()}</b></div>
-      <div class="sub" style="margin-top:8px">
-        突破 ±1σ（阈 ${Number(s.breakout_threshold_pct||0).toFixed(3)}%）：
-        ↑ <b>${pct(s.p_breakout_up)}</b> · ↓ <b>${pct(s.p_breakout_down)}</b>
-      </div>
-      <div class="sub" style="margin-top:8px">
-        样本外方向准确率 <b>${acc}</b>（n=${n}）· 自信子集 ${accC}（覆盖 ${cov}）
-      </div>
+    const actionable = !!s.actionable;
+    const enabled = s.horizon_enabled !== false;
+    const action = s.action || 'wait';
+    let badgeCls = 'wait', badgeTxt = '观望';
+    if (!enabled) { badgeCls = 'off'; badgeTxt = '停用'; }
+    else if (actionable && action === 'long') { badgeCls = 'go'; badgeTxt = '多'; }
+    else if (actionable && action === 'short') { badgeCls = 'short'; badgeTxt = '空'; }
+
+    let body;
+    if (!enabled) {
+      body = `<div class="big wait">停用</div>
+        <div class="sub">该周期样本外过滤后仍无稳定边，默认不参与决策。</div>
+        <div class="sub">整体方向准确率 <b>${pct((data.oos_metrics?.[s.label]?.direction||{}).accuracy)}</b></div>`;
+    } else if (!actionable) {
+      body = `<div class="big wait">无边 / 观望</div>
+        <div class="sub">${s.reason || '未过置信门槛'}</div>
+        <div class="sub">门槛 |P−0.5| ≥ <b>${s.edge_threshold ?? '—'}</b>
+          · 该桶 OOS 命中 <b>${pct(s.bucket_oos_hit)}</b>
+          · 开火率 <b>${pct(s.bucket_oos_coverage)}</b></div>
+        <div class="sub">原始 P(上涨) <b>${pct(s.p_up_raw)}</b>（未达门槛，界面不展示为交易概率）</div>`;
+    } else {
+      const side = action === 'long' ? 'long' : 'short';
+      body = `<div class="big ${side}">${actionLabel(action)}${s.strength ? ' · ' + s.strength : ''}</div>
+        <div class="sub">P(上涨) <b>${pct(s.p_up)}</b> · 边相对 50% <b>${pct(s.edge_vs_50)}</b></div>
+        <div class="sub">门槛 |P−0.5| ≥ <b>${s.edge_threshold}</b>
+          · 该桶 OOS 命中 <b>${pct(s.bucket_oos_hit)}</b>（n=${s.bucket_oos_n ?? '—'}）
+          · 开火率 <b>${pct(s.bucket_oos_coverage)}</b></div>
+        ${s.rolling_bucket_hit && s.rolling_bucket_hit.hit != null
+          ? `<div class="sub">近端同桶命中 <b>${pct(s.rolling_bucket_hit.hit)}</b>（n=${s.rolling_bucket_hit.n}）</div>` : ''}
+        ${s.breakout_note
+          ? `<div class="sub" style="margin-top:8px;color:var(--accent)">${s.breakout_note.label}
+               · p=${pct(s.breakout_note.p)}
+               ${s.breakout_note.oos_precision != null ? '· OOS精确度 ' + pct(s.breakout_note.oos_precision) : ''}</div>` : ''}
+        <div class="sub" style="margin-top:8px">${s.risk_note || ''}</div>`;
+    }
+    const hot = actionable ? (action === 'long' ? 'hot-long' : 'hot-short') : 'dim';
+    return `<div class="card ${hot}">
+      <span class="badge ${badgeCls}">${badgeTxt}</span>
+      <h2>${s.label} · ${s.horizon_min}分钟</h2>
+      ${body}
     </div>`;
   }).join('');
 }
 
 function renderOos(data) {
   const box = document.getElementById('oos');
+  const cals = data.calibrations || {};
   const oos = data.oos_metrics || {};
   const rows = [];
   ['15m','1h','4h'].forEach(k => {
+    const c = cals[k] || (oos[k] && oos[k].calibration) || {};
     const d = oos[k] && oos[k].direction;
-    if (!d) return;
-    rows.push(`<div class="metric"><div class="k">${k} 方向准确率</div><div class="v">${(d.accuracy*100).toFixed(1)}%</div></div>`);
-    rows.push(`<div class="metric"><div class="k">${k} Brier（越低越好）</div><div class="v">${d.brier}</div></div>`);
+    rows.push(`<div class="metric"><div class="k">${k} 过滤门槛 |P−0.5|</div><div class="v">${c.threshold != null ? c.threshold : '—'}</div></div>`);
+    rows.push(`<div class="metric"><div class="k">${k} 过滤后 OOS 命中</div><div class="v">${c.hit != null ? (c.hit*100).toFixed(1)+'%' : '—'} <span style="font-size:11px;color:var(--muted)">${c.achievable ? '✓≥55%' : '未达'}</span></div></div>`);
+    rows.push(`<div class="metric"><div class="k">${k} 开火率 / 全量准确率</div><div class="v">${c.coverage != null ? (c.coverage*100).toFixed(1)+'%' : '—'} / ${d && d.accuracy != null ? (d.accuracy*100).toFixed(1)+'%' : '—'}</div></div>`);
   });
-  box.innerHTML = rows.join('') || '<div class="meta">暂无样本外指标</div>';
+  box.innerHTML = rows.join('');
   const dq = data.data_quality || {};
   document.getElementById('note').textContent =
     (dq.note || '') +
-    ' 不做 3d/7d 贴价中位。准确率 <52% 时概率会向 50% 收缩。';
+    ' 非投资建议；展示命中率为 walk-forward 样本外过滤桶统计，不保证未来收益。';
   const snap = data.feature_snapshot || {};
   const show = ['cvd_slope_15','d_imb_5','taker_imb_15','ret_15','vol_z_15','range_pos_5','rvol_15'];
   document.getElementById('feats').innerHTML = show.map(k => {
@@ -231,21 +322,20 @@ async function refresh() {
     const r = await fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
-    if (data.mode !== 'short_horizon_signals' && !(data.signals && data.signals.length)) {
-      st.textContent = '仍是旧版中位预测 JSON，等待信号管线推送…';
+    const okMode = data.mode === 'decision_board_v2' || data.mode === 'short_horizon_signals' || (data.signals && data.signals.length);
+    if (!okMode) {
+      st.textContent = '等待决策板 JSON…';
       return;
     }
     const s = data.summary || {};
     document.getElementById('price').textContent = Number(s.last_mid).toFixed(2);
-    const dir = s.direction || 'flat';
-    const pill = document.getElementById('dir');
-    pill.textContent = dir.toUpperCase();
-    pill.className = 'pill ' + clsDir(dir);
+    const nAct = s.n_actionable != null ? s.n_actionable : (data.n_actionable || 0);
     document.getElementById('summary').textContent =
-      `1h 上涨 ${pct(s.p_up_1h)} · 15m ${pct(s.p_up_15m)} · 4h ${pct(s.p_up_4h)}`;
-    document.getElementById('gen').textContent =
-      (data.generated_at_shanghai || '') +
+      (s.headline || s.status || '—') +
+      ` · 可交易卡片 ${nAct}` +
       (data.venues ? ' · ' + (Array.isArray(data.venues) ? data.venues.join('+') : data.venues) : '');
+    document.getElementById('gen').textContent = data.generated_at_shanghai || '';
+    renderBoard(data);
     draw(data);
     renderSignals(data);
     renderOos(data);
