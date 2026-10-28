@@ -70,7 +70,8 @@
   <span id="dir" class="pill flat">—</span>
   <span id="gen" class="meta"></span>
   <span class="meta" style="width:100%;margin-top:2px">
-    仅中位数 · 数据：liquiditymapper 同源公开盘口+成交（OKX/Bitget/Hyperliquid）· 节点 1h/4h/1d/3d/7d · 约每分钟更新
+    仅中位数 · 数据：liquiditymapper 同源（OKX/Bitget/Hyperliquid）· 节点 1h/4h/1d/3d/7d · 约每分钟更新
+    · <span id="ftbadge" style="color:#f0b429">Timestral-209M 订单流轻量微调</span>
   </span>
 </header>
 <main>
@@ -253,6 +254,17 @@ async function refresh() {
     pill.textContent = dir.toUpperCase();
     pill.className = 'pill ' + dir;
     document.getElementById('gen').textContent =
+
+  const ft = document.getElementById('ftbadge');
+  if (ft) {
+    if (j.fine_tuned || j.calibrator_applied) {
+      ft.style.display = '';
+      const bit = j.calibrator_applied ? '校准头已应用' : '微调权重';
+      ft.textContent = '已微调 · ' + bit + (j.model && j.model.includes('orderflow-ft') ? ' · orderflow-ft' : '');
+    } else {
+      ft.textContent = 'Timestral-209M 零样本';
+    }
+  }
       (data.generated_at_shanghai || data.generated_at_utc || '') +
       ' · ctx ' + (data.context_len || '') + '×1h · ' + (data.source || '') +
       (data.venues ? ' [' + (Array.isArray(data.venues) ? data.venues.join('+') : data.venues) + ']' : '');
