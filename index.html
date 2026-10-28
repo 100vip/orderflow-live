@@ -91,7 +91,7 @@ const canvas = document.getElementById('chart');
 const ctx = canvas.getContext('2d');
 const DATA_URL = (location.hostname.includes('github.io') || location.pathname.includes('orderflow-live'))
   ? './data/latest_forecast.json'
-  : './data/latest_forecast.json';
+  : '/out/latest_forecast.json';
 
 // History share of x-axis (~22%); forecast gets the rest (~78%) for more room
 const HIST_X_SHARE = 0.22;
