@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>BTCUSDT · Timestral-209M 订单流预测</title>
+<title>BTCUSDT · Timestral 多周期中位预测</title>
 <style>
   :root {
     --bg: #0b0f14;
@@ -12,7 +12,7 @@
     --muted: #8b9bb4;
     --hist: #5b8def;
     --med: #f0b429;
-    --band: rgba(240, 180, 41, 0.18);
+    --node: #ff7b72;
     --up: #3ecf8e;
     --down: #f07178;
     --grid: #1e2a3a;
@@ -39,37 +39,55 @@
     background: var(--panel); border: 1px solid var(--grid); border-radius: 12px;
     padding: 12px 12px 8px; max-width: 1100px; margin: 0 auto;
   }
-  canvas { width: 100%; height: 420px; display: block; }
+  canvas { width: 100%; height: 440px; display: block; }
+  .nodes {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px; max-width: 1100px; margin: 12px auto 0;
+  }
+  .node {
+    background: var(--panel); border: 1px solid var(--grid); border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .node .lbl { color: var(--muted); font-size: 12px; }
+  .node .val { font-size: 16px; font-weight: 600; margin-top: 2px; }
+  .node .dlt { font-size: 12px; margin-top: 2px; }
+  .node .dlt.up { color: var(--up); }
+  .node .dlt.down { color: var(--down); }
   .legend {
     display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted);
     padding: 8px 4px 4px;
   }
   .swatch { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 1px; }
-  .err { color: var(--down); padding: 20px; text-align: center; }
 </style>
 </head>
 <body>
 <header>
-  <h1>BTCUSDT 1m · Timestral-209M</h1>
+  <h1>BTCUSDT · 多周期中位预测（至 7 天）</h1>
   <span id="summary" class="meta">加载中…</span>
   <span id="dir" class="pill flat">—</span>
   <span id="gen" class="meta"></span>
-  <span class="meta" style="width:100%;margin-top:2px">现价 mid 来自最近 1m 特征 · 预测约每 1 分钟更新（非 tick 级实时）</span>
+  <span class="meta" style="width:100%;margin-top:2px">
+    仅展示预测中位数（无分位带宽）· 1h 特征上预测 1h / 4h / 1d / 3d / 7d · 约每分钟更新
+  </span>
 </header>
 <main>
   <div class="card">
-    <canvas id="chart" width="1000" height="420"></canvas>
+    <canvas id="chart" width="1000" height="440"></canvas>
     <div class="legend">
-      <span><i class="swatch" style="background:var(--hist)"></i>历史 mid</span>
-      <span><i class="swatch" style="background:var(--med)"></i>预测中位</span>
-      <span><i class="swatch" style="background:var(--band);height:10px;width:14px"></i>q10–q90</span>
+      <span><i class="swatch" style="background:var(--hist)"></i>历史 mid（1h）</span>
+      <span><i class="swatch" style="background:var(--med)"></i>预测中位路径</span>
+      <span><i class="swatch" style="background:var(--node);height:8px;width:8px;border-radius:50%"></i>周期节点</span>
       <span id="status"></span>
     </div>
   </div>
+  <div class="nodes" id="nodes"></div>
 </main>
 <script>
 const canvas = document.getElementById('chart');
 const ctx = canvas.getContext('2d');
+const DATA_URL = (location.pathname.includes('orderflow-live') || location.hostname.includes('github.io'))
+  ? './data/latest_forecast.json'
+  : './data/latest_forecast.json';
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -85,27 +103,26 @@ function draw(data) {
   resize();
   const W = canvas.getBoundingClientRect().width;
   const H = canvas.getBoundingClientRect().height;
-  const pad = { l: 64, r: 16, t: 16, b: 36 };
+  const pad = { l: 64, r: 20, t: 20, b: 40 };
   const plotW = W - pad.l - pad.r;
   const plotH = H - pad.t - pad.b;
 
-  const histN = Math.min(180, data.history.mid.length);
-  const histMid = data.history.mid.slice(-histN);
-  const med = data.forecast.mid_median;
-  const q10 = data.forecast.mid_q10;
-  const q90 = data.forecast.mid_q90;
-  const all = histMid.concat(q10, q90, med);
+  const histMid = (data.history && data.history.mid) ? data.history.mid.slice(-120) : [];
+  const path = (data.path_7d && data.path_7d.mid) ? data.path_7d.mid
+    : (data.forecast && data.forecast.mid_median) ? data.forecast.mid_median : [];
+  const nodes = data.median_nodes || [];
+  const all = histMid.concat(path);
+  if (!all.length) return;
   let ymin = Math.min(...all), ymax = Math.max(...all);
   const span = ymax - ymin || 1;
   ymin -= span * 0.08; ymax += span * 0.08;
 
-  const total = histMid.length + med.length;
+  const total = histMid.length + path.length;
   const xAt = i => pad.l + (i / Math.max(total - 1, 1)) * plotW;
   const yAt = v => pad.t + (1 - (v - ymin) / (ymax - ymin)) * plotH;
 
   ctx.clearRect(0, 0, W, H);
-  // grid
-  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid').trim() || '#1e2a3a';
+  ctx.strokeStyle = '#1e2a3a';
   ctx.lineWidth = 1;
   for (let g = 0; g <= 4; g++) {
     const y = pad.t + (g / 4) * plotH;
@@ -117,73 +134,101 @@ function draw(data) {
     ctx.fillText(val.toFixed(1), pad.l - 8, y + 4);
   }
 
-  // now line
-  const nowX = xAt(histMid.length - 1);
+  const nowX = xAt(Math.max(histMid.length - 1, 0));
   ctx.strokeStyle = '#3a4a5e';
   ctx.setLineDash([4, 4]);
   ctx.beginPath(); ctx.moveTo(nowX, pad.t); ctx.lineTo(nowX, pad.t + plotH); ctx.stroke();
   ctx.setLineDash([]);
 
-  // band
-  ctx.beginPath();
-  for (let i = 0; i < med.length; i++) {
-    const x = xAt(histMid.length - 1 + i);
-    const y = yAt(q90[i]);
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  }
-  for (let i = med.length - 1; i >= 0; i--) {
-    const x = xAt(histMid.length - 1 + i);
-    ctx.lineTo(x, yAt(q10[i]));
-  }
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(240, 180, 41, 0.18)';
-  ctx.fill();
-
   // history
-  ctx.beginPath();
-  histMid.forEach((v, i) => {
-    const x = xAt(i), y = yAt(v);
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  if (histMid.length) {
+    ctx.beginPath();
+    histMid.forEach((v, i) => {
+      const x = xAt(i), y = yAt(v);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = '#5b8def';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+  }
+
+  // median path
+  if (path.length && histMid.length) {
+    ctx.beginPath();
+    ctx.moveTo(xAt(histMid.length - 1), yAt(histMid[histMid.length - 1]));
+    path.forEach((v, i) => ctx.lineTo(xAt(histMid.length + i), yAt(v)));
+    ctx.strokeStyle = '#f0b429';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // nodes
+  nodes.forEach(n => {
+    const step = n.step || n.hours || 1;
+    const i = histMid.length - 1 + step;
+    const x = xAt(i), y = yAt(n.mid);
+    ctx.beginPath();
+    ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff7b72';
+    ctx.fill();
+    ctx.fillStyle = '#e6edf3';
+    ctx.font = '10px ui-sans-serif, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(n.label, x, Math.max(pad.t + 10, y - 10));
   });
-  ctx.strokeStyle = '#5b8def';
-  ctx.lineWidth = 1.6;
-  ctx.stroke();
 
-  // median forecast (connect from last hist)
-  ctx.beginPath();
-  ctx.moveTo(xAt(histMid.length - 1), yAt(histMid[histMid.length - 1]));
-  med.forEach((v, i) => ctx.lineTo(xAt(histMid.length + i), yAt(v)));
-  ctx.strokeStyle = '#f0b429';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // footer labels
   ctx.fillStyle = '#8b9bb4';
   ctx.font = '11px ui-sans-serif, system-ui';
   ctx.textAlign = 'left';
-  ctx.fillText('历史', pad.l, H - 12);
+  ctx.fillText('历史 1h', pad.l, H - 12);
   ctx.textAlign = 'right';
-  ctx.fillText('预测 +' + med.length + 'm', W - pad.r, H - 12);
+  ctx.fillText('预测 → +7d', W - pad.r, H - 12);
+}
+
+function renderNodes(data) {
+  const box = document.getElementById('nodes');
+  const nodes = data.median_nodes || [];
+  const last = (data.summary && data.summary.last_mid) || 0;
+  if (!nodes.length && data.medians) {
+    const order = ['1h','4h','1d','3d','7d'];
+    order.forEach(k => {
+      if (data.medians[k] == null) return;
+      const v = data.medians[k];
+      const d = v - last;
+      nodes.push({ label: k, mid: v, delta: d, pct: last ? d/last*100 : 0 });
+    });
+  }
+  box.innerHTML = nodes.map(n => {
+    const d = n.delta != null ? n.delta : (n.mid - last);
+    const pct = n.pct != null ? n.pct : (last ? d/last*100 : 0);
+    const cls = d > 0 ? 'up' : (d < 0 ? 'down' : '');
+    const sign = d >= 0 ? '+' : '';
+    return `<div class="node"><div class="lbl">${n.label} 中位</div>` +
+      `<div class="val">${Number(n.mid).toFixed(2)}</div>` +
+      `<div class="dlt ${cls}">${sign}${Number(d).toFixed(2)} (${sign}${Number(pct).toFixed(3)}%)</div></div>`;
+  }).join('');
 }
 
 async function refresh() {
   const st = document.getElementById('status');
   try {
-    const r = await fetch('./data/latest_forecast.json?t=' + Date.now(), { cache: 'no-store' });
+    const r = await fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
     const s = data.summary || {};
     const dir = s.direction || 'flat';
+    const m = data.medians || {};
     document.getElementById('summary').textContent =
-      `last ${Number(s.last_mid).toFixed(2)} → H${data.horizon} ${Number(s.pred_mid_end).toFixed(2)} ` +
-      `(${s.delta_end >= 0 ? '+' : ''}${Number(s.delta_end).toFixed(2)} / ${Number(s.pct_end).toFixed(3)}%)`;
+      `last ${Number(s.last_mid).toFixed(2)} → 7d ${Number(s.pred_7d ?? m['7d']).toFixed(2)} ` +
+      `(${(s.delta_7d ?? 0) >= 0 ? '+' : ''}${Number(s.delta_7d ?? 0).toFixed(2)} / ${Number(s.pct_7d ?? 0).toFixed(3)}%)`;
     const pill = document.getElementById('dir');
     pill.textContent = dir.toUpperCase();
     pill.className = 'pill ' + dir;
     const genLabel = data.generated_at_shanghai || data.generated_at_utc || '';
     document.getElementById('gen').textContent =
-      genLabel + ' · ctx ' + data.context_len + ' · ' + (data.source || '');
+      genLabel + ' · ctx ' + (data.context_len || '') + '×1h · ' + (data.source || '');
     draw(data);
+    renderNodes(data);
     let ageTxt = '';
     try {
       const g = data.generated_at_utc || data.generated_at_shanghai;
