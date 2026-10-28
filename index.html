@@ -70,7 +70,7 @@
   <span id="dir" class="pill flat">—</span>
   <span id="gen" class="meta"></span>
   <span class="meta" style="width:100%;margin-top:2px">
-    仅中位数 · 节点 1h / 4h / 1d / 3d / 7d · 右侧黄色区为预测一周 · 约每分钟更新
+    仅中位数 · 数据：liquiditymapper 同源公开盘口+成交（OKX/Bitget/Hyperliquid）· 节点 1h/4h/1d/3d/7d · 约每分钟更新
   </span>
 </header>
 <main>
@@ -254,7 +254,8 @@ async function refresh() {
     pill.className = 'pill ' + dir;
     document.getElementById('gen').textContent =
       (data.generated_at_shanghai || data.generated_at_utc || '') +
-      ' · ctx ' + (data.context_len || '') + '×1h · ' + (data.source || '');
+      ' · ctx ' + (data.context_len || '') + '×1h · ' + (data.source || '') +
+      (data.venues ? ' [' + (Array.isArray(data.venues) ? data.venues.join('+') : data.venues) + ']' : '');
     draw(data);
     renderNodes(data);
     let ageTxt = '';
