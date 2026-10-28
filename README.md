@@ -1,2 +1,3 @@
-# BTCUSDT orderflow live forecast
-Auto-updated from Timestral pipeline (~1 min). Not tick-level realtime.
+# orderflow-live
+
+已下线：预测模型与部署数据已删除。
