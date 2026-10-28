@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>BTCUSDT · Timestral 多周期中位预测</title>
+<title>BTCUSDT · 短周期订单流信号</title>
 <style>
   :root {
     --bg: #0b0f14;
@@ -11,12 +11,11 @@
     --text: #e6edf3;
     --muted: #8b9bb4;
     --hist: #5b8def;
-    --med: #f0b429;
-    --node: #ff7b72;
     --up: #3ecf8e;
     --down: #f07178;
+    --flat: #d2a8ff;
     --grid: #1e2a3a;
-    --fc-bg: rgba(240, 180, 41, 0.06);
+    --accent: #f0b429;
   }
   * { box-sizing: border-box; }
   body {
@@ -34,67 +33,96 @@
   }
   .pill.up { background: rgba(62,207,142,.15); color: var(--up); }
   .pill.down { background: rgba(240,113,120,.15); color: var(--down); }
-  .pill.flat { background: rgba(139,155,180,.15); color: var(--muted); }
-  main { padding: 10px 12px 20px; }
+  .pill.flat { background: rgba(210,168,255,.15); color: var(--flat); }
+  main { padding: 12px 14px 28px; max-width: 1200px; margin: 0 auto; }
+  .price-row {
+    display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; margin-bottom: 12px;
+  }
+  .price { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px; margin-bottom: 14px;
+  }
   .card {
     background: var(--panel); border: 1px solid var(--grid); border-radius: 12px;
-    padding: 8px 8px 6px; max-width: 1400px; margin: 0 auto;
+    padding: 14px 16px;
   }
-  .chart-wrap { width: 100%; height: min(68vh, 620px); min-height: 420px; }
+  .card h2 { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .prob {
+    font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1;
+  }
+  .prob.up { color: var(--up); }
+  .prob.down { color: var(--down); }
+  .prob.flat { color: var(--flat); }
+  .bar {
+    height: 10px; border-radius: 999px; background: #1a2330; overflow: hidden; margin: 10px 0 6px;
+    display: flex;
+  }
+  .bar .u { background: var(--up); height: 100%; }
+  .bar .d { background: var(--down); height: 100%; }
+  .sub { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .sub b { color: var(--text); font-weight: 600; }
+  .chart-wrap { width: 100%; height: 220px; }
   canvas { width: 100%; height: 100%; display: block; }
-  .nodes {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 10px; max-width: 1400px; margin: 12px auto 0;
+  .metrics {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px; margin-top: 12px;
   }
-  .node {
-    background: var(--panel); border: 1px solid var(--grid); border-radius: 10px;
-    padding: 12px 14px;
+  .metric {
+    background: #0e141c; border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px;
   }
-  .node.hi { border-color: rgba(240,180,41,.45); box-shadow: inset 0 0 0 1px rgba(240,180,41,.12); }
-  .node .lbl { color: var(--muted); font-size: 12px; }
-  .node .val { font-size: 18px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .node .dlt { font-size: 12px; margin-top: 4px; }
-  .node .dlt.up { color: var(--up); }
-  .node .dlt.down { color: var(--down); }
-  .legend {
-    display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted);
-    padding: 8px 6px 4px;
+  .metric .k { font-size: 11px; color: var(--muted); }
+  .metric .v { font-size: 16px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .note {
+    margin-top: 14px; padding: 12px 14px; border-radius: 10px;
+    background: rgba(240,180,41,.06); border: 1px solid rgba(240,180,41,.2);
+    font-size: 12px; color: var(--muted); line-height: 1.55;
   }
-  .swatch { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 1px; }
+  .feats {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+  }
+  .feat {
+    font-size: 11px; padding: 3px 8px; border-radius: 6px; background: #0e141c; border: 1px solid var(--grid);
+    font-variant-numeric: tabular-nums; color: var(--muted);
+  }
+  .feat b { color: var(--text); }
 </style>
 </head>
 <body>
 <header>
-  <h1>BTCUSDT · 多周期中位预测（至 7 天）</h1>
-  <span id="summary" class="meta">加载中…</span>
+  <h1>BTCUSDT · 短周期订单流信号</h1>
   <span id="dir" class="pill flat">—</span>
   <span id="gen" class="meta"></span>
-  <span class="meta" style="width:100%;margin-top:2px">
-    仅中位数 · 数据：liquiditymapper 同源（OKX/Bitget/Hyperliquid）· 节点 1h/4h/1d/3d/7d · 约每分钟更新
-    · <span id="ftbadge" style="color:#f0b429">Timestral-209M 订单流轻量微调</span>
+  <span class="meta" style="width:100%">
+    15m / 1h / 4h 上涨概率 + ±1σ 突破 · 样本外准确率诚实标注 · liquiditymapper 同源（OKX/Bitget/Hyperliquid）
   </span>
 </header>
 <main>
-  <div class="card">
-    <div class="chart-wrap"><canvas id="chart"></canvas></div>
-    <div class="legend">
-      <span><i class="swatch" style="background:var(--hist)"></i>历史 mid（压缩）</span>
-      <span><i class="swatch" style="background:var(--med)"></i>预测中位路径（一周）</span>
-      <span><i class="swatch" style="background:var(--node);height:8px;width:8px;border-radius:50%"></i>周期节点</span>
-      <span id="status"></span>
-    </div>
+  <div class="price-row">
+    <div class="price" id="price">—</div>
+    <div class="meta" id="summary">加载中…</div>
   </div>
-  <div class="nodes" id="nodes"></div>
+
+  <div class="grid" id="signals"></div>
+
+  <div class="card">
+    <h2>近 4 小时 mid</h2>
+    <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    <div class="meta" id="status" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <h2>样本外（walk-forward 末段）</h2>
+    <div class="metrics" id="oos"></div>
+    <div class="note" id="note"></div>
+    <div style="margin-top:10px" class="meta">当前特征快照</div>
+    <div class="feats" id="feats"></div>
+  </div>
 </main>
 <script>
 const canvas = document.getElementById('chart');
 const ctx = canvas.getContext('2d');
-const DATA_URL = (location.hostname.includes('github.io') || location.pathname.includes('orderflow-live'))
-  ? './data/latest_forecast.json'
-  : './data/latest_forecast.json';
-
-// History share of x-axis (~22%); forecast gets the rest (~78%) for more room
-const HIST_X_SHARE = 0.22;
+const DATA_URL = './data/latest_forecast.json';
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -105,136 +133,95 @@ function resize() {
 }
 window.addEventListener('resize', () => { resize(); if (window.__last) draw(window.__last); });
 
+function pct(p) { return (Number(p) * 100).toFixed(1) + '%'; }
+function clsDir(d) { return d === 'up' ? 'up' : (d === 'down' ? 'down' : 'flat'); }
+
 function draw(data) {
   window.__last = data;
   resize();
   const W = canvas.parentElement.getBoundingClientRect().width;
   const H = canvas.parentElement.getBoundingClientRect().height;
-  const pad = { l: 68, r: 18, t: 28, b: 44 };
+  const pad = { l: 58, r: 12, t: 12, b: 24 };
   const plotW = W - pad.l - pad.r;
   const plotH = H - pad.t - pad.b;
-
-  // Keep short history so forecast dominates
-  const histMid = (data.history && data.history.mid) ? data.history.mid.slice(-48) : [];
-  const path = (data.path_7d && data.path_7d.mid) ? data.path_7d.mid : [];
-  const nodes = data.median_nodes || [];
-  const all = histMid.concat(path);
-  if (!all.length) return;
-  let ymin = Math.min(...all), ymax = Math.max(...all);
+  const mid = (data.history && data.history.mid) ? data.history.mid.slice(-240) : [];
+  if (!mid.length) return;
+  let ymin = Math.min(...mid), ymax = Math.max(...mid);
   const span = ymax - ymin || 1;
-  ymin -= span * 0.1; ymax += span * 0.1;
-
-  const histW = plotW * HIST_X_SHARE;
-  const fcW = plotW * (1 - HIST_X_SHARE);
-  const xHist = i => pad.l + (histMid.length <= 1 ? 0 : (i / (histMid.length - 1)) * histW);
-  const xFc = i => pad.l + histW + ((i + 1) / Math.max(path.length, 1)) * fcW;
+  ymin -= span * 0.08; ymax += span * 0.08;
+  const xAt = i => pad.l + (mid.length <= 1 ? 0 : (i / (mid.length - 1)) * plotW);
   const yAt = v => pad.t + (1 - (v - ymin) / (ymax - ymin)) * plotH;
-
   ctx.clearRect(0, 0, W, H);
-
-  // Forecast zone background
-  ctx.fillStyle = 'rgba(240, 180, 41, 0.07)';
-  ctx.fillRect(pad.l + histW, pad.t, fcW, plotH);
-  ctx.fillStyle = 'rgba(240, 180, 41, 0.14)';
-  ctx.font = '600 12px ui-sans-serif, system-ui';
-  ctx.textAlign = 'left';
-  ctx.fillText('预测区 → +7 天', pad.l + histW + 10, pad.t + 16);
-
-  // grid
   ctx.strokeStyle = '#1e2a3a';
   ctx.lineWidth = 1;
-  for (let g = 0; g <= 5; g++) {
-    const y = pad.t + (g / 5) * plotH;
+  for (let g = 0; g <= 4; g++) {
+    const y = pad.t + (g / 4) * plotH;
     ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
-    const val = ymax - (g / 5) * (ymax - ymin);
+    const val = ymax - (g / 4) * (ymax - ymin);
     ctx.fillStyle = '#8b9bb4';
     ctx.font = '11px ui-sans-serif, system-ui';
     ctx.textAlign = 'right';
-    ctx.fillText(val.toFixed(1), pad.l - 8, y + 4);
+    ctx.fillText(val.toFixed(0), pad.l - 6, y + 4);
   }
-
-  // now line
-  const nowX = histMid.length ? xHist(histMid.length - 1) : pad.l + histW;
-  ctx.strokeStyle = '#6b7c93';
-  ctx.setLineDash([5, 4]);
-  ctx.beginPath(); ctx.moveTo(nowX, pad.t); ctx.lineTo(nowX, pad.t + plotH); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = '#8b9bb4';
-  ctx.font = '10px ui-sans-serif, system-ui';
-  ctx.textAlign = 'center';
-  ctx.fillText('现在', nowX, pad.t + plotH + 14);
-
-  // history
-  if (histMid.length) {
-    ctx.beginPath();
-    histMid.forEach((v, i) => {
-      const x = xHist(i), y = yAt(v);
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
-    ctx.strokeStyle = '#5b8def';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-
-  // median path
-  if (path.length && histMid.length) {
-    ctx.beginPath();
-    ctx.moveTo(xHist(histMid.length - 1), yAt(histMid[histMid.length - 1]));
-    path.forEach((v, i) => ctx.lineTo(xFc(i), yAt(v)));
-    ctx.strokeStyle = '#f0b429';
-    ctx.lineWidth = 2.4;
-    ctx.stroke();
-  }
-
-  // node markers + labels
-  nodes.forEach(n => {
-    const step = n.step || n.hours || 1;
-    const i = step - 1;
-    if (i < 0 || i >= path.length) return;
-    const x = xFc(i), y = yAt(n.mid);
-    ctx.beginPath();
-    ctx.arc(x, y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = '#ff7b72';
-    ctx.fill();
-    ctx.strokeStyle = '#0b0f14';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.fillStyle = '#e6edf3';
-    ctx.font = '600 11px ui-sans-serif, system-ui';
-    ctx.textAlign = 'center';
-    const labelY = (n.label === '1h' || n.label === '4h') ? y - 12 : y + 18;
-    ctx.fillText(n.label, x, labelY);
+  ctx.beginPath();
+  mid.forEach((v, i) => {
+    const x = xAt(i), y = yAt(v);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   });
-
-  ctx.fillStyle = '#8b9bb4';
-  ctx.font = '11px ui-sans-serif, system-ui';
-  ctx.textAlign = 'left';
-  ctx.fillText('历史（压缩）', pad.l, H - 10);
-  ctx.textAlign = 'right';
-  ctx.fillText('+7d', W - pad.r, H - 10);
+  ctx.strokeStyle = '#5b8def';
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
 }
 
-function renderNodes(data) {
-  const box = document.getElementById('nodes');
-  const last = (data.summary && data.summary.last_mid) || 0;
-  let nodes = (data.median_nodes || []).slice();
-  if (!nodes.length && data.medians) {
-    ['1h','4h','1d','3d','7d'].forEach(k => {
-      if (data.medians[k] == null) return;
-      const v = data.medians[k];
-      const d = v - last;
-      nodes.push({ label: k, mid: v, delta: d, pct: last ? d/last*100 : 0 });
-    });
-  }
-  box.innerHTML = nodes.map(n => {
-    const d = n.delta != null ? n.delta : (n.mid - last);
-    const pct = n.pct != null ? n.pct : (last ? d/last*100 : 0);
-    const cls = d > 0 ? 'up' : (d < 0 ? 'down' : '');
-    const sign = d >= 0 ? '+' : '';
-    const hi = (n.label === '7d' || n.label === '3d') ? ' hi' : '';
-    return `<div class="node${hi}"><div class="lbl">${n.label} 中位</div>` +
-      `<div class="val">${Number(n.mid).toFixed(2)}</div>` +
-      `<div class="dlt ${cls}">${sign}${Number(d).toFixed(2)} (${sign}${Number(pct).toFixed(3)}%)</div></div>`;
+function renderSignals(data) {
+  const box = document.getElementById('signals');
+  const sigs = data.signals || [];
+  const oos = data.oos_metrics || {};
+  box.innerHTML = sigs.map(s => {
+    const pu = Number(s.p_up);
+    const pd = 1 - pu;
+    const d = s.direction || 'flat';
+    const m = (oos[s.label] && oos[s.label].direction) || {};
+    const acc = m.accuracy != null ? (m.accuracy * 100).toFixed(1) + '%' : '—';
+    const accC = m.accuracy_confident != null ? (m.accuracy_confident * 100).toFixed(1) + '%' : '—';
+    const cov = m.confident_coverage != null ? (m.confident_coverage * 100).toFixed(0) + '%' : '—';
+    const n = m.n != null ? m.n : '—';
+    return `<div class="card">
+      <h2>${s.label} 上涨概率</h2>
+      <div class="prob ${clsDir(d)}">${pct(pu)}</div>
+      <div class="bar"><div class="u" style="width:${(pu*100).toFixed(1)}%"></div><div class="d" style="width:${(pd*100).toFixed(1)}%"></div></div>
+      <div class="sub">下跌 ${(pd*100).toFixed(1)}% · 信号 <b>${d.toUpperCase()}</b></div>
+      <div class="sub" style="margin-top:8px">
+        突破 ±1σ（阈 ${Number(s.breakout_threshold_pct||0).toFixed(3)}%）：
+        ↑ <b>${pct(s.p_breakout_up)}</b> · ↓ <b>${pct(s.p_breakout_down)}</b>
+      </div>
+      <div class="sub" style="margin-top:8px">
+        样本外方向准确率 <b>${acc}</b>（n=${n}）· 自信子集 ${accC}（覆盖 ${cov}）
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderOos(data) {
+  const box = document.getElementById('oos');
+  const oos = data.oos_metrics || {};
+  const rows = [];
+  ['15m','1h','4h'].forEach(k => {
+    const d = oos[k] && oos[k].direction;
+    if (!d) return;
+    rows.push(`<div class="metric"><div class="k">${k} 方向准确率</div><div class="v">${(d.accuracy*100).toFixed(1)}%</div></div>`);
+    rows.push(`<div class="metric"><div class="k">${k} Brier（越低越好）</div><div class="v">${d.brier}</div></div>`);
+  });
+  box.innerHTML = rows.join('') || '<div class="meta">暂无样本外指标</div>';
+  const dq = data.data_quality || {};
+  document.getElementById('note').textContent =
+    (dq.note || '') +
+    ' 不做 3d/7d 贴价中位。准确率 <52% 时概率会向 50% 收缩。';
+  const snap = data.feature_snapshot || {};
+  const show = ['cvd_slope_15','d_imb_5','taker_imb_15','ret_15','vol_z_15','range_pos_5','rvol_15'];
+  document.getElementById('feats').innerHTML = show.map(k => {
+    const v = snap[k];
+    return `<span class="feat">${k} <b>${v == null ? '—' : Number(v).toFixed(4)}</b></span>`;
   }).join('');
 }
 
@@ -244,43 +231,35 @@ async function refresh() {
     const r = await fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
+    if (data.mode !== 'short_horizon_signals' && !(data.signals && data.signals.length)) {
+      st.textContent = '仍是旧版中位预测 JSON，等待信号管线推送…';
+      return;
+    }
     const s = data.summary || {};
+    document.getElementById('price').textContent = Number(s.last_mid).toFixed(2);
     const dir = s.direction || 'flat';
-    const m = data.medians || {};
-    document.getElementById('summary').textContent =
-      `last ${Number(s.last_mid).toFixed(2)} → 7d ${Number(s.pred_7d ?? m['7d']).toFixed(2)} ` +
-      `(${(s.delta_7d ?? 0) >= 0 ? '+' : ''}${Number(s.delta_7d ?? 0).toFixed(2)} / ${Number(s.pct_7d ?? 0).toFixed(3)}%)`;
     const pill = document.getElementById('dir');
     pill.textContent = dir.toUpperCase();
-    pill.className = 'pill ' + dir;
-    const ft = document.getElementById('ftbadge');
-    if (ft) {
-      if (data.fine_tuned || data.calibrator_applied) {
-        ft.style.display = '';
-        const bit = data.calibrator_applied ? '校准头已应用' : '微调权重';
-        ft.textContent = '已微调 · ' + bit + (data.model && String(data.model).includes('orderflow-ft') ? ' · orderflow-ft' : '');
-      } else {
-        ft.textContent = 'Timestral-209M 零样本';
-      }
-    }
+    pill.className = 'pill ' + clsDir(dir);
+    document.getElementById('summary').textContent =
+      `1h 上涨 ${pct(s.p_up_1h)} · 15m ${pct(s.p_up_15m)} · 4h ${pct(s.p_up_4h)}`;
     document.getElementById('gen').textContent =
-      (data.generated_at_shanghai || data.generated_at_utc || '') +
-      ' · ctx ' + (data.context_len || '') + '×1h · ' + (data.source || '') +
-      (data.venues ? ' [' + (Array.isArray(data.venues) ? data.venues.join('+') : data.venues) + ']' : '');
+      (data.generated_at_shanghai || '') +
+      (data.venues ? ' · ' + (Array.isArray(data.venues) ? data.venues.join('+') : data.venues) : '');
     draw(data);
-    renderNodes(data);
+    renderSignals(data);
+    renderOos(data);
     let ageTxt = '';
     try {
       const g = data.generated_at_utc || data.generated_at_shanghai;
-      const t = Date.parse(g && g.includes('CST') ? g.replace(' CST','+08:00').replace(' ','T') : g);
+      const t = Date.parse(g && String(g).includes('CST') ? String(g).replace(' CST','+08:00').replace(' ','T') : g);
       if (!isNaN(t)) ageTxt = ' · 距上次生成 ' + Math.max(0, Math.round((Date.now()-t)/1000)) + 's';
     } catch (_) {}
     st.textContent = '已刷新 ' + new Date().toLocaleTimeString() + ageTxt;
   } catch (e) {
-    st.textContent = '等待预测文件… ' + e.message;
+    st.textContent = '等待信号文件… ' + e.message;
   }
 }
-
 resize();
 refresh();
 setInterval(refresh, 8000);
