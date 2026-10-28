@@ -253,18 +253,17 @@ async function refresh() {
     const pill = document.getElementById('dir');
     pill.textContent = dir.toUpperCase();
     pill.className = 'pill ' + dir;
-    document.getElementById('gen').textContent =
-
-  const ft = document.getElementById('ftbadge');
-  if (ft) {
-    if (j.fine_tuned || j.calibrator_applied) {
-      ft.style.display = '';
-      const bit = j.calibrator_applied ? '校准头已应用' : '微调权重';
-      ft.textContent = '已微调 · ' + bit + (j.model && j.model.includes('orderflow-ft') ? ' · orderflow-ft' : '');
-    } else {
-      ft.textContent = 'Timestral-209M 零样本';
+    const ft = document.getElementById('ftbadge');
+    if (ft) {
+      if (data.fine_tuned || data.calibrator_applied) {
+        ft.style.display = '';
+        const bit = data.calibrator_applied ? '校准头已应用' : '微调权重';
+        ft.textContent = '已微调 · ' + bit + (data.model && String(data.model).includes('orderflow-ft') ? ' · orderflow-ft' : '');
+      } else {
+        ft.textContent = 'Timestral-209M 零样本';
+      }
     }
-  }
+    document.getElementById('gen').textContent =
       (data.generated_at_shanghai || data.generated_at_utc || '') +
       ' · ctx ' + (data.context_len || '') + '×1h · ' + (data.source || '') +
       (data.venues ? ' [' + (Array.isArray(data.venues) ? data.venues.join('+') : data.venues) + ']' : '');
