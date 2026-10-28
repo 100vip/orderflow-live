@@ -16,6 +16,7 @@
     --up: #3ecf8e;
     --down: #f07178;
     --grid: #1e2a3a;
+    --fc-bg: rgba(240, 180, 41, 0.06);
   }
   * { box-sizing: border-box; }
   body {
@@ -23,7 +24,7 @@
     background: var(--bg); color: var(--text); min-height: 100vh;
   }
   header {
-    padding: 16px 20px 8px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline;
+    padding: 14px 20px 10px; display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: baseline;
     border-bottom: 1px solid var(--grid);
   }
   h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
@@ -34,28 +35,30 @@
   .pill.up { background: rgba(62,207,142,.15); color: var(--up); }
   .pill.down { background: rgba(240,113,120,.15); color: var(--down); }
   .pill.flat { background: rgba(139,155,180,.15); color: var(--muted); }
-  main { padding: 12px 16px 24px; }
+  main { padding: 10px 12px 20px; }
   .card {
     background: var(--panel); border: 1px solid var(--grid); border-radius: 12px;
-    padding: 12px 12px 8px; max-width: 1100px; margin: 0 auto;
+    padding: 8px 8px 6px; max-width: 1400px; margin: 0 auto;
   }
-  canvas { width: 100%; height: 440px; display: block; }
+  .chart-wrap { width: 100%; height: min(68vh, 620px); min-height: 420px; }
+  canvas { width: 100%; height: 100%; display: block; }
   .nodes {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 8px; max-width: 1100px; margin: 12px auto 0;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px; max-width: 1400px; margin: 12px auto 0;
   }
   .node {
     background: var(--panel); border: 1px solid var(--grid); border-radius: 10px;
-    padding: 10px 12px;
+    padding: 12px 14px;
   }
+  .node.hi { border-color: rgba(240,180,41,.45); box-shadow: inset 0 0 0 1px rgba(240,180,41,.12); }
   .node .lbl { color: var(--muted); font-size: 12px; }
-  .node .val { font-size: 16px; font-weight: 600; margin-top: 2px; }
-  .node .dlt { font-size: 12px; margin-top: 2px; }
+  .node .val { font-size: 18px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .node .dlt { font-size: 12px; margin-top: 4px; }
   .node .dlt.up { color: var(--up); }
   .node .dlt.down { color: var(--down); }
   .legend {
     display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted);
-    padding: 8px 4px 4px;
+    padding: 8px 6px 4px;
   }
   .swatch { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 1px; }
 </style>
@@ -67,15 +70,15 @@
   <span id="dir" class="pill flat">—</span>
   <span id="gen" class="meta"></span>
   <span class="meta" style="width:100%;margin-top:2px">
-    仅展示预测中位数（无分位带宽）· 1h 特征上预测 1h / 4h / 1d / 3d / 7d · 约每分钟更新
+    仅中位数 · 节点 1h / 4h / 1d / 3d / 7d · 右侧黄色区为预测一周 · 约每分钟更新
   </span>
 </header>
 <main>
   <div class="card">
-    <canvas id="chart" width="1000" height="440"></canvas>
+    <div class="chart-wrap"><canvas id="chart"></canvas></div>
     <div class="legend">
-      <span><i class="swatch" style="background:var(--hist)"></i>历史 mid（1h）</span>
-      <span><i class="swatch" style="background:var(--med)"></i>预测中位路径</span>
+      <span><i class="swatch" style="background:var(--hist)"></i>历史 mid（压缩）</span>
+      <span><i class="swatch" style="background:var(--med)"></i>预测中位路径（一周）</span>
       <span><i class="swatch" style="background:var(--node);height:8px;width:8px;border-radius:50%"></i>周期节点</span>
       <span id="status"></span>
     </div>
@@ -85,15 +88,18 @@
 <script>
 const canvas = document.getElementById('chart');
 const ctx = canvas.getContext('2d');
-const DATA_URL = (location.pathname.includes('orderflow-live') || location.hostname.includes('github.io'))
+const DATA_URL = (location.hostname.includes('github.io') || location.pathname.includes('orderflow-live'))
   ? './data/latest_forecast.json'
   : './data/latest_forecast.json';
 
+// History share of x-axis (~22%); forecast gets the rest (~78%) for more room
+const HIST_X_SHARE = 0.22;
+
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = Math.floor(rect.width * dpr);
-  canvas.height = Math.floor(rect.height * dpr);
+  const wrap = canvas.parentElement.getBoundingClientRect();
+  canvas.width = Math.floor(wrap.width * dpr);
+  canvas.height = Math.floor(wrap.height * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener('resize', () => { resize(); if (window.__last) draw(window.__last); });
@@ -101,97 +107,118 @@ window.addEventListener('resize', () => { resize(); if (window.__last) draw(wind
 function draw(data) {
   window.__last = data;
   resize();
-  const W = canvas.getBoundingClientRect().width;
-  const H = canvas.getBoundingClientRect().height;
-  const pad = { l: 64, r: 20, t: 20, b: 40 };
+  const W = canvas.parentElement.getBoundingClientRect().width;
+  const H = canvas.parentElement.getBoundingClientRect().height;
+  const pad = { l: 68, r: 18, t: 28, b: 44 };
   const plotW = W - pad.l - pad.r;
   const plotH = H - pad.t - pad.b;
 
-  const histMid = (data.history && data.history.mid) ? data.history.mid.slice(-120) : [];
-  const path = (data.path_7d && data.path_7d.mid) ? data.path_7d.mid
-    : (data.forecast && data.forecast.mid_median) ? data.forecast.mid_median : [];
+  // Keep short history so forecast dominates
+  const histMid = (data.history && data.history.mid) ? data.history.mid.slice(-48) : [];
+  const path = (data.path_7d && data.path_7d.mid) ? data.path_7d.mid : [];
   const nodes = data.median_nodes || [];
   const all = histMid.concat(path);
   if (!all.length) return;
   let ymin = Math.min(...all), ymax = Math.max(...all);
   const span = ymax - ymin || 1;
-  ymin -= span * 0.08; ymax += span * 0.08;
+  ymin -= span * 0.1; ymax += span * 0.1;
 
-  const total = histMid.length + path.length;
-  const xAt = i => pad.l + (i / Math.max(total - 1, 1)) * plotW;
+  const histW = plotW * HIST_X_SHARE;
+  const fcW = plotW * (1 - HIST_X_SHARE);
+  const xHist = i => pad.l + (histMid.length <= 1 ? 0 : (i / (histMid.length - 1)) * histW);
+  const xFc = i => pad.l + histW + ((i + 1) / Math.max(path.length, 1)) * fcW;
   const yAt = v => pad.t + (1 - (v - ymin) / (ymax - ymin)) * plotH;
 
   ctx.clearRect(0, 0, W, H);
+
+  // Forecast zone background
+  ctx.fillStyle = 'rgba(240, 180, 41, 0.07)';
+  ctx.fillRect(pad.l + histW, pad.t, fcW, plotH);
+  ctx.fillStyle = 'rgba(240, 180, 41, 0.14)';
+  ctx.font = '600 12px ui-sans-serif, system-ui';
+  ctx.textAlign = 'left';
+  ctx.fillText('预测区 → +7 天', pad.l + histW + 10, pad.t + 16);
+
+  // grid
   ctx.strokeStyle = '#1e2a3a';
   ctx.lineWidth = 1;
-  for (let g = 0; g <= 4; g++) {
-    const y = pad.t + (g / 4) * plotH;
+  for (let g = 0; g <= 5; g++) {
+    const y = pad.t + (g / 5) * plotH;
     ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
-    const val = ymax - (g / 4) * (ymax - ymin);
+    const val = ymax - (g / 5) * (ymax - ymin);
     ctx.fillStyle = '#8b9bb4';
     ctx.font = '11px ui-sans-serif, system-ui';
     ctx.textAlign = 'right';
     ctx.fillText(val.toFixed(1), pad.l - 8, y + 4);
   }
 
-  const nowX = xAt(Math.max(histMid.length - 1, 0));
-  ctx.strokeStyle = '#3a4a5e';
-  ctx.setLineDash([4, 4]);
+  // now line
+  const nowX = histMid.length ? xHist(histMid.length - 1) : pad.l + histW;
+  ctx.strokeStyle = '#6b7c93';
+  ctx.setLineDash([5, 4]);
   ctx.beginPath(); ctx.moveTo(nowX, pad.t); ctx.lineTo(nowX, pad.t + plotH); ctx.stroke();
   ctx.setLineDash([]);
+  ctx.fillStyle = '#8b9bb4';
+  ctx.font = '10px ui-sans-serif, system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('现在', nowX, pad.t + plotH + 14);
 
   // history
   if (histMid.length) {
     ctx.beginPath();
     histMid.forEach((v, i) => {
-      const x = xAt(i), y = yAt(v);
+      const x = xHist(i), y = yAt(v);
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
     ctx.strokeStyle = '#5b8def';
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
   }
 
   // median path
   if (path.length && histMid.length) {
     ctx.beginPath();
-    ctx.moveTo(xAt(histMid.length - 1), yAt(histMid[histMid.length - 1]));
-    path.forEach((v, i) => ctx.lineTo(xAt(histMid.length + i), yAt(v)));
+    ctx.moveTo(xHist(histMid.length - 1), yAt(histMid[histMid.length - 1]));
+    path.forEach((v, i) => ctx.lineTo(xFc(i), yAt(v)));
     ctx.strokeStyle = '#f0b429';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.4;
     ctx.stroke();
   }
 
-  // nodes
+  // node markers + labels
   nodes.forEach(n => {
     const step = n.step || n.hours || 1;
-    const i = histMid.length - 1 + step;
-    const x = xAt(i), y = yAt(n.mid);
+    const i = step - 1;
+    if (i < 0 || i >= path.length) return;
+    const x = xFc(i), y = yAt(n.mid);
     ctx.beginPath();
-    ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
     ctx.fillStyle = '#ff7b72';
     ctx.fill();
+    ctx.strokeStyle = '#0b0f14';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
     ctx.fillStyle = '#e6edf3';
-    ctx.font = '10px ui-sans-serif, system-ui';
+    ctx.font = '600 11px ui-sans-serif, system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText(n.label, x, Math.max(pad.t + 10, y - 10));
+    const labelY = (n.label === '1h' || n.label === '4h') ? y - 12 : y + 18;
+    ctx.fillText(n.label, x, labelY);
   });
 
   ctx.fillStyle = '#8b9bb4';
   ctx.font = '11px ui-sans-serif, system-ui';
   ctx.textAlign = 'left';
-  ctx.fillText('历史 1h', pad.l, H - 12);
+  ctx.fillText('历史（压缩）', pad.l, H - 10);
   ctx.textAlign = 'right';
-  ctx.fillText('预测 → +7d', W - pad.r, H - 12);
+  ctx.fillText('+7d', W - pad.r, H - 10);
 }
 
 function renderNodes(data) {
   const box = document.getElementById('nodes');
-  const nodes = data.median_nodes || [];
   const last = (data.summary && data.summary.last_mid) || 0;
+  let nodes = (data.median_nodes || []).slice();
   if (!nodes.length && data.medians) {
-    const order = ['1h','4h','1d','3d','7d'];
-    order.forEach(k => {
+    ['1h','4h','1d','3d','7d'].forEach(k => {
       if (data.medians[k] == null) return;
       const v = data.medians[k];
       const d = v - last;
@@ -203,7 +230,8 @@ function renderNodes(data) {
     const pct = n.pct != null ? n.pct : (last ? d/last*100 : 0);
     const cls = d > 0 ? 'up' : (d < 0 ? 'down' : '');
     const sign = d >= 0 ? '+' : '';
-    return `<div class="node"><div class="lbl">${n.label} 中位</div>` +
+    const hi = (n.label === '7d' || n.label === '3d') ? ' hi' : '';
+    return `<div class="node${hi}"><div class="lbl">${n.label} 中位</div>` +
       `<div class="val">${Number(n.mid).toFixed(2)}</div>` +
       `<div class="dlt ${cls}">${sign}${Number(d).toFixed(2)} (${sign}${Number(pct).toFixed(3)}%)</div></div>`;
   }).join('');
@@ -224,9 +252,9 @@ async function refresh() {
     const pill = document.getElementById('dir');
     pill.textContent = dir.toUpperCase();
     pill.className = 'pill ' + dir;
-    const genLabel = data.generated_at_shanghai || data.generated_at_utc || '';
     document.getElementById('gen').textContent =
-      genLabel + ' · ctx ' + (data.context_len || '') + '×1h · ' + (data.source || '');
+      (data.generated_at_shanghai || data.generated_at_utc || '') +
+      ' · ctx ' + (data.context_len || '') + '×1h · ' + (data.source || '');
     draw(data);
     renderNodes(data);
     let ageTxt = '';
